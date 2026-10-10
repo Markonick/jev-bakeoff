@@ -1,0 +1,189 @@
+# Real-document label manifest — TEMPLATE (this .example file is committed; the live
+# `real_manifest.yaml` you create from it is gitignored and must NEVER be committed).
+#
+# Purpose: add your own PII-redacted real documents as a SECOND source for the validator
+# accuracy gate, alongside the synthetic corpus. Real docs catch layout/OCR/edge cases a
+# generator never invents. The gate loads this automatically when present
+# (evals/dataset.py :: load_real_cases) and runs synthetic-only when it is absent.
+#
+# Workflow:
+#   1. Redact:  make redact-corpus IN=/path/to/real   → writes sanitised PDFs to corpus/real/
+#      (quarantines any locked / no-text-layer file to corpus/quarantine/ for OCR handling).
+#   2. VERIFY every redacted PDF by hand (automated redaction is never 100%). Never add a
+#      row for an ID card / passport scan — a face + layout survive text redaction.
+#   3. Copy this file to eval/corpus/real_manifest.yaml and fill in one row per doc below.
+#
+# Each row is the same contract as the synthetic manifest: the redacted PDF + the
+# requirement the validator is TOLD to check + the expected verdict. To test a rejection,
+# point the requirement at the wrong year/name/type for that document.
+#
+# Manifest schema (see corpus/README.md for the full reference):
+#   docs_dir:  folder holding the redacted PDFs, relative to THIS manifest (or absolute).
+#   cases[]:
+#     file:           redacted PDF filename inside docs_dir              (required)
+#     document_type:  catalog type the validator is told to check for    (required)
+#     label:          broker-catalog label_en shown to the validator     (required)
+#     tax_year:       int, or omit for a no-tax-year type                 (optional)
+#     buyer_name:     the (redacted) name, or omit if scrubbed            (optional)
+#     ai_hint:        type-specific guidance, mirrors the catalog         (optional)
+#     variant:        free-form tag, e.g. real_clean / real_wrong_year    (optional)
+#     slice:          score-breakdown bucket; defaults to "real"          (optional)
+#     expect:         { matches: true|false }  OR  { terminal: not_pdf|password_protected }
+
+# Where the redacted PDFs live, relative to THIS manifest (or an absolute path). The
+# `make redact-corpus` target writes to corpus/real/ (this manifest sits in corpus/).
+docs_dir: real
+
+cases:
+  # A genuine tax assessment, correctly described → the validator should ACCEPT it.
+  - file: tax_assessment_2024_redacted.pdf
+    document_type: tax_assessment
+    label: Tax Assessment # broker-catalog label the validator is given
+    tax_year: 2024
+    buyer_name: ΠΑΠΑΔΟΠΟΥΛΟΣ ΝΙΚΟΛΑΟΣ # the redacted name, or omit if scrubbed
+    ai_hint: null # optional type-specific guidance, mirrors the catalog
+    variant: real_clean # free-form tag; used only to slice the report
+    expect: { matches: true }
+
+  # The SAME document, but the requirement asks for a different year → expect REJECT.
+  - file: tax_assessment_2024_redacted.pdf
+    document_type: tax_assessment
+    label: Tax Assessment
+    tax_year: 2025
+    variant: real_wrong_year
+    expect: { matches: false }
+
+  # A password-protected or non-PDF real file resolves to a terminal reason instead of
+  # a matches verdict. Terminal reasons: not_pdf | password_protected.
+  - file: locked_e1_redacted.pdf
+    document_type: e1_form
+    label: E1 Form
+    tax_year: 2024
+    variant: real_locked
+    expect: { terminal: password_protected }
+
+  # ---------------------------------------------------------------------------
+  # FOREIGN specimens (Phase 3) — collection guide + reference countries:
+  # docs/design/journey/phase3-real-specimens.md. These route through the
+  # production country-agnostic validator (agents/validation.py :: system_for),
+  # NOT the Greek-layout prompt. Fill in the `file:` names after `make redact` +
+  # hand-verify; delete the rows you don't have samples for. `cert` types (apostille)
+  # are noted — a sample WITH the apostille page attached exercises the advisory
+  # apostille_detected path; a matching sample WITHOUT one should still expect
+  # matches:true (the apostille is advisory-only, it never drives the verdict).
+  # ---------------------------------------------------------------------------
+
+  # 1) foreign_tax_return (cert) — DE / US / CN. ACCEPT when correctly described.
+  - file: foreign_tax_return_de_redacted.pdf
+    document_type: foreign_tax_return
+    label: Foreign Tax Return
+    tax_year: 2024
+    variant: real_clean
+    expect: { matches: true }
+  # SAME file, wrong year in the requirement → REJECT.
+  - file: foreign_tax_return_de_redacted.pdf
+    document_type: foreign_tax_return
+    label: Foreign Tax Return
+    tax_year: 2022
+    variant: real_wrong_year
+    expect: { matches: false }
+  # cert type with the apostille page removed → still ACCEPT (advisory-only invariant).
+  - file: foreign_tax_return_de_no_apostille_redacted.pdf
+    document_type: foreign_tax_return
+    label: Foreign Tax Return
+    tax_year: 2024
+    variant: real_apostille_missing
+    expect: { matches: true }
+
+  # 2) foreign_tax_clearance (cert) — GB / DE.
+  - file: foreign_tax_clearance_gb_redacted.pdf
+    document_type: foreign_tax_clearance
+    label: Foreign Tax Clearance Certificate
+    variant: real_clean
+    expect: { matches: true }
+
+  # 3) foreign_income_proof (cert) — DE / GB.
+  - file: foreign_income_proof_de_redacted.pdf
+    document_type: foreign_income_proof
+    label: Foreign Proof of Income
+    variant: real_clean
+    expect: { matches: true }
+
+  # 4) foreign_bank_statements — GB / US.
+  - file: foreign_bank_statements_gb_redacted.pdf
+    document_type: foreign_bank_statements
+    label: Foreign Bank Statements
+    variant: real_clean
+    expect: { matches: true }
+  # A genuine bank statement offered where a TAX RETURN is required → REJECT
+  # (the sturdiness case — the validator must not accept on official-looking layout).
+  - file: foreign_bank_statements_gb_redacted.pdf
+    document_type: foreign_tax_return
+    label: Foreign Tax Return
+    tax_year: 2024
+    variant: real_wrong_type
+    expect: { matches: false }
+
+  # 5) foreign_credit_report — DE (SCHUFA) / US (FICO) / GB.
+  - file: foreign_credit_report_de_redacted.pdf
+    document_type: foreign_credit_report
+    label: Foreign Credit Report
+    variant: real_clean
+    expect: { matches: true }
+
+  # 6) passport — any. ⚠️ Only add a sample with the PHOTO + MRZ physically blacked
+  # out (text redaction leaves the face); otherwise skip — the synthetic case covers
+  # the text path.
+  - file: passport_redacted.pdf
+    document_type: passport
+    label: Passport
+    variant: real_clean
+    expect: { matches: true }
+
+  # 7) residence_permit — DE / non-EU.
+  - file: residence_permit_de_redacted.pdf
+    document_type: residence_permit
+    label: Residence Permit
+    variant: real_clean
+    expect: { matches: true }
+
+  # 8) greek_tax_number — Greek ΑΦΜ issued to a non-resident (ΔΟΥ Κατοίκων Εξωτερικού).
+  - file: greek_tax_number_redacted.pdf
+    document_type: greek_tax_number
+    label: Greek Tax Number (AFM)
+    variant: real_clean
+    expect: { matches: true }
+
+  # 9) foreign_business_income (cert) — US / DE.
+  - file: foreign_business_income_us_redacted.pdf
+    document_type: foreign_business_income
+    label: Foreign Business Income
+    tax_year: 2024
+    variant: real_clean
+    expect: { matches: true }
+
+  # 10) foreign_dividend_certificate (cert) — CY / GB.
+  - file: foreign_dividend_certificate_cy_redacted.pdf
+    document_type: foreign_dividend_certificate
+    label: Foreign Dividend Certificate
+    tax_year: 2024
+    variant: real_clean
+    expect: { matches: true }
+
+  # 11) proof_of_address — a FOREIGN utility bill (the synthetic sample is a Greek ΔΕΗ
+  # bill, so a real foreign one is the gap). Routes country-agnostically in production.
+  - file: proof_of_address_foreign_redacted.pdf
+    document_type: proof_of_address
+    label: Proof of Address
+    variant: real_clean
+    expect: { matches: true }
+
+  # PRIORITY non-Latin target (CN/AR): the synthetic corpus can't render CJK glyphs, so
+  # a real (or image-scanned) sample is the ONLY thing that exercises the validator's
+  # non-Latin / vision path. Add one when you have it.
+  - file: foreign_tax_return_cn_redacted.pdf
+    document_type: foreign_tax_return
+    label: Foreign Tax Return
+    tax_year: 2024
+    variant: real_clean_non_latin
+    expect: { matches: true }

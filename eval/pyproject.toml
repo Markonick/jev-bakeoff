@@ -1,0 +1,66 @@
+[project]
+name = "jev-bakeoff-eval"
+version = "0.1.0"
+description = "Offline LLM eval harness + PII redaction tooling for the agent surfaces. Dev-only; never shipped."
+# Pinned to 3.12: the ML stack (spaCy/Presidio) has no wheels for the agent's
+# 3.14 runtime yet. Deliberately decoupled from apps/agent so these heavy deps
+# never enter the shipped image.
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fpdf2>=2.8.7",
+    # PII detection + true PDF redaction now lives in the shared
+    # ``packages/redaction`` package (imported via ``pythonpath`` below); its ML
+    # deps (presidio/pymupdf/spacy) are declared here so ``uv sync`` installs them
+    # into the eval venv the same as before the relocation.
+    "presidio-analyzer>=2.2",
+    "presidio-anonymizer>=2.2",
+    "pymupdf>=1.24",
+    "pyyaml>=6.0.3",
+    "spacy>=3.8",
+    # Phase 2 accuracy gate: drives the real SUT (apps/agent validate_pdf) + scores it.
+    "anthropic>=0.40",
+    "deepeval>=2.0",
+    # rate-extraction gate drives the real agent seam, which imports aiohttp+structlog.
+    "aiohttp>=3.10",
+    "structlog>=24.1",
+    # the LLMClient port (core.llm_client) routes generation through LiteLLM, so the
+    # key-free SUT path (EVAL_SUT=port → Ollama) can import it in the eval venv.
+    "litellm>=1.55",
+    # renders the DeepEval report_*.md + bakeoff.md into the static results dashboard.
+    "markdown>=3.5",
+    "langfuse>=3.0",
+    "pillow>=12.3.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+# ``..`` puts the repo-root ``packages/redaction`` importable as ``redaction``
+# (the redaction engine was relocated out of ``eval/`` into the shared package).
+pythonpath = [".", "../packages/redaction"]
+asyncio_mode = "auto"
+# `eval_*.py` holds the paid LLM gate (selected with `-m eval`); `test_*.py` is the
+# deterministic suite. Both are collected; the marker decides what runs.
+python_files = ["test_*.py", "eval_*.py"]
+markers = [
+    # Paid, non-deterministic LLM accuracy gate (calls the real Claude model). Excluded
+    # from the blocking CI job (`-m 'not eval'`); run in the nightly/manual eval workflow.
+    "eval: hits the live model — needs ANTHROPIC_API_KEY, costs money",
+]

@@ -1,0 +1,22 @@
+# Run the eval harness in a container — identical image locally and in CI.
+#
+#   make docker-test        # deterministic suite (no key)   ── or ──
+#   docker compose run --rm eval
+#   make docker-bakeoff     # cost projection
+#   ANTHROPIC_API_KEY=sk-… make docker-eval   # paid accuracy gates
+#
+# Local mounts give live edits without a rebuild; the venv lives at /opt (see Dockerfile)
+# so the source mount can't shadow it. In CI we build + run the image with no mounts.
+services:
+  eval:
+    build:
+      context: ..
+      dockerfile: eval/Dockerfile
+    image: jev-bakeoff-eval:latest
+    working_dir: /work/eval
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    volumes:
+      - ./:/work/eval
+      - ../apps/agent:/work/apps/agent:ro
+      - ../packages:/work/packages:ro

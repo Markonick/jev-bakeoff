@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.env.local
+*.egg-info/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+
+# Synthetic corpus build output (reproducible from seed; never committed)
+corpus/generated/
+eval/corpus/generated/

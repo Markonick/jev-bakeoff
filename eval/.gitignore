@@ -1,0 +1,36 @@
+# Never commit real documents or anything derived from them — automated
+# redaction is not perfect, so redacted output is quarantined here and must be
+# human-verified before any file is ever moved into a committed corpus. The
+# unanchored patterns match these dirs at any depth (incl. corpus/real/,
+# corpus/quarantine/ written by `make redact-corpus`).
+real/
+redacted/
+quarantine/
+corpus/real/
+corpus/quarantine/
+# The live real-doc label manifest (built from corpus/real_manifest.example.yaml) points
+# at redacted real docs — local-only, never committed. The .example template IS committed.
+corpus/real_manifest.yaml
+
+# Generated synthetic corpus (rendered from seed + templates — reproducible,
+# so the binaries stay out of git; commit the generator, not its output).
+corpus/generated/
+
+# promptfoo board — local run cache + generated results (the config is committed, its
+# output is not). Reports written by the live eval gates are transient artifacts too.
+board/.promptfoo/
+board/output/
+board/promptfoo-results.*
+/report.md
+/portal_report.md
+
+# uv / venv / caches
+.venv/
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.deepeval/
+
+# local secrets: Langfuse Cloud + model API keys (see .env.example)
+.env

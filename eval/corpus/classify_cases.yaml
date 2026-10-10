@@ -1,0 +1,188 @@
+# Synthetic documents for the classifier gate. Each renders to a Greek-text PDF and is
+# classified against its case's open candidates; expect_index is the [n] the model should
+# pick (or null for no-match / misfile-avoidance). Same _classify seam as capture.
+#
+# Optional per-row keys:
+#   slice:     score-breakdown bucket (clean / adversarial / scanned / injection / …).
+#              Defaults to "clean".
+#   transform: apply an input-diversity transform to the rendered PDF (scanned / multipage
+#              / injection) — the document content is unchanged, so expect_index still holds.
+
+_common_candidates: &tax_e1
+  - { label_en: "Tax Assessment", document_type: "tax_assessment", tax_year: 2024,
+      ai_hint: "An AADE act determining the year's income tax (Εκκαθαριστικό)." }
+  - { label_en: "E1 Income Tax Return", document_type: "e1_form", tax_year: 2024,
+      ai_hint: "The E1 personal income tax return form." }
+
+# A broader candidate slate — used by the multi-candidate discrimination cases.
+_broad_candidates: &broad
+  - { label_en: "Tax Assessment", document_type: "tax_assessment", tax_year: 2024,
+      ai_hint: "An AADE act determining the year's income tax (Εκκαθαριστικό)." }
+  - { label_en: "E1 Income Tax Return", document_type: "e1_form", tax_year: 2024,
+      ai_hint: "The E1 personal income tax return form." }
+  - { label_en: "E3 Business Income Statement", document_type: "e3_form", tax_year: 2024,
+      ai_hint: "The E3 statement of business activity income." }
+  - { label_en: "Bank Account Statement", document_type: "bank_statement",
+      ai_hint: "A bank account statement with IBAN, period and running balances." }
+  - { label_en: "Employment Contract", document_type: "work_contract",
+      ai_hint: "An employment contract / employer certificate for salaried work." }
+
+cases:
+  # The tax assessment itself → matches candidate [0].
+  - id: tax_assessment_matches
+    slice: clean
+    buyer_name: "ΠΑΠΑΔΟΠΟΥΛΟΣ ΝΙΚΟΛΑΟΣ"
+    doc:
+      subtitle: "ΑΝΕΞΑΡΤΗΤΗ ΑΡΧΗ ΔΗΜΟΣΙΩΝ ΕΣΟΔΩΝ (ΑΑΔΕ)"
+      title: "ΠΡΑΞΗ ΔΙΟΙΚΗΤΙΚΟΥ ΠΡΟΣΔΙΟΡΙΣΜΟΥ ΦΟΡΟΥ — Εκκαθαριστικό"
+      fields:
+        - ["Φορολογικό έτος", "2024"]
+        - ["ΑΦΜ", "094035012"]
+      body:
+        - "Συνολικό δηλωθέν εισόδημα: 24.500,00 €."
+        - "Πράξη προσδιορισμού φόρου φυσικών προσώπων."
+    candidates: *tax_e1
+    expect_index: 0
+
+  # The E1 return → matches candidate [1], NOT the assessment.
+  - id: e1_matches
+    slice: clean
+    buyer_name: "ΠΑΠΑΔΟΠΟΥΛΟΣ ΝΙΚΟΛΑΟΣ"
+    doc:
+      subtitle: "ΑΝΕΞΑΡΤΗΤΗ ΑΡΧΗ ΔΗΜΟΣΙΩΝ ΕΣΟΔΩΝ (ΑΑΔΕ)"
+      title: "ΔΗΛΩΣΗ ΦΟΡΟΛΟΓΙΑΣ ΕΙΣΟΔΗΜΑΤΟΣ — Έντυπο Ε1"
+      fields:
+        - ["Φορολογικό έτος", "2024"]
+      body:
+        - "Έντυπο Ε1: Δήλωση φορολογίας εισοδήματος φυσικών προσώπων."
+    candidates: *tax_e1
+    expect_index: 1
+
+  # An unrelated bank statement → no candidate fits (misfile-avoidance).
+  - id: unrelated_no_match
+    slice: adversarial
+    buyer_name: "ΠΑΠΑΔΟΠΟΥΛΟΣ ΝΙΚΟΛΑΟΣ"
+    doc:
+      subtitle: "ΤΡΑΠΕΖΑ"
+      title: "ΑΝΤΙΓΡΑΦΟ ΚΙΝΗΣΗΣ ΛΟΓΑΡΙΑΣΜΟΥ"
+      body:
+        - "Κίνηση λογαριασμού Ιανουαρίου 2024 — υπόλοιπο 3.120,45 €."
+    candidates: *tax_e1
+    expect_index: null
+
+  # A tax assessment for the WRONG year (2019) when only 2024 is requested → no match.
+  - id: wrong_year_no_match
+    slice: adversarial
+    doc:
+      subtitle: "ΑΝΕΞΑΡΤΗΤΗ ΑΡΧΗ ΔΗΜΟΣΙΩΝ ΕΣΟΔΩΝ (ΑΑΔΕ)"
+      title: "ΠΡΑΞΗ ΔΙΟΙΚΗΤΙΚΟΥ ΠΡΟΣΔΙΟΡΙΣΜΟΥ ΦΟΡΟΥ — Εκκαθαριστικό"
+      fields:
+        - ["Φορολογικό έτος", "2019"]
+      body:
+        - "Εκκαθαριστικό φορολογικού έτους 2019."
+    candidates:
+      - { label_en: "Tax Assessment", document_type: "tax_assessment", tax_year: 2024,
+          ai_hint: "An AADE act determining the 2024 income tax." }
+    expect_index: null
+
+  # ---- Multi-candidate discrimination (broad slate) -------------------------
+  # An E3 among 5 candidates → picks [2], not the tax/E1/bank/contract rows.
+  - id: e3_among_five
+    slice: clean
+    buyer_name: "ΙΩΑΝΝΟΥ ΜΑΡΙΑ"
+    doc:
+      subtitle: "ΑΝΕΞΑΡΤΗΤΗ ΑΡΧΗ ΔΗΜΟΣΙΩΝ ΕΣΟΔΩΝ (ΑΑΔΕ)"
+      title: "ΚΑΤΑΣΤΑΣΗ ΟΙΚΟΝΟΜΙΚΩΝ ΣΤΟΙΧΕΙΩΝ ΑΠΟ ΕΠΙΧΕΙΡΗΜΑΤΙΚΗ ΔΡΑΣΤΗΡΙΟΤΗΤΑ — Έντυπο Ε3"
+      fields:
+        - ["Φορολογικό έτος", "2024"]
+      body:
+        - "Κύκλος εργασιών: 58.000,00 €. Καθαρά κέρδη: 12.400,00 €."
+    candidates: *broad
+    expect_index: 2
+
+  # An employment contract among 5 candidates → picks [4].
+  - id: work_contract_among_five
+    slice: clean
+    buyer_name: "ΙΩΑΝΝΟΥ ΜΑΡΙΑ"
+    doc:
+      subtitle: "ΒΕΒΑΙΩΣΗ ΕΡΓΟΔΟΤΗ"
+      title: "ΣΥΜΒΑΣΗ ΕΞΑΡΤΗΜΕΝΗΣ ΕΡΓΑΣΙΑΣ ΑΟΡΙΣΤΟΥ ΧΡΟΝΟΥ"
+      body:
+        - "Εργοδότης: ACME ΤΕΧΝΟΛΟΓΙΕΣ Α.Ε. — Θέση: Μηχανικός Λογισμικού."
+        - "Ημ/νία πρόσληψης: 01/02/2021. Μικτές μηνιαίες αποδοχές: 2.400,00 €."
+    candidates: *broad
+    expect_index: 4
+
+  # ---- Adversarial: a look-alike with the identifying keywords stripped -----
+  # A generic "statement of figures" with no type keyword → no confident match.
+  - id: lookalike_no_match
+    slice: adversarial
+    buyer_name: "ΠΑΠΑΔΟΠΟΥΛΟΣ ΝΙΚΟΛΑΟΣ"
+    doc:
+      subtitle: "ΟΙΚΟΝΟΜΙΚΗ ΕΠΙΣΚΟΠΗΣΗ"
+      title: "ΚΑΤΑΣΤΑΣΗ ΣΤΟΙΧΕΙΩΝ"
+      body:
+        - "Σύνολο A: 24.500,00 €. Σύνολο B: 3.200,00 €."
+    candidates: *tax_e1
+    expect_index: null
+
+  # An E3 offered where only tax/E1 are open → misfile-avoidance (no match).
+  - id: e3_misfile_no_match
+    slice: adversarial
+    buyer_name: "ΙΩΑΝΝΟΥ ΜΑΡΙΑ"
+    doc:
+      subtitle: "ΑΝΕΞΑΡΤΗΤΗ ΑΡΧΗ ΔΗΜΟΣΙΩΝ ΕΣΟΔΩΝ (ΑΑΔΕ)"
+      title: "ΚΑΤΑΣΤΑΣΗ ΟΙΚΟΝΟΜΙΚΩΝ ΣΤΟΙΧΕΙΩΝ — Έντυπο Ε3"
+      fields:
+        - ["Φορολογικό έτος", "2024"]
+      body:
+        - "Κύκλος εργασιών: 58.000,00 €."
+    candidates: *tax_e1
+    expect_index: null
+
+  # ---- Input-diversity: same signal, harder to read ------------------------
+  # The tax assessment, scanned (image-only, skew/blur) → still picks [0].
+  - id: tax_assessment_scanned
+    slice: scanned
+    transform: scanned
+    buyer_name: "ΠΑΠΑΔΟΠΟΥΛΟΣ ΝΙΚΟΛΑΟΣ"
+    doc:
+      subtitle: "ΑΝΕΞΑΡΤΗΤΗ ΑΡΧΗ ΔΗΜΟΣΙΩΝ ΕΣΟΔΩΝ (ΑΑΔΕ)"
+      title: "ΠΡΑΞΗ ΔΙΟΙΚΗΤΙΚΟΥ ΠΡΟΣΔΙΟΡΙΣΜΟΥ ΦΟΡΟΥ — Εκκαθαριστικό"
+      fields:
+        - ["Φορολογικό έτος", "2024"]
+      body:
+        - "Συνολικό δηλωθέν εισόδημα: 24.500,00 €. Πράξη προσδιορισμού φόρου."
+    candidates: *tax_e1
+    expect_index: 0
+
+  # The E1, sandwiched between blank pages → still picks [1].
+  - id: e1_multipage
+    slice: multipage
+    transform: multipage
+    buyer_name: "ΠΑΠΑΔΟΠΟΥΛΟΣ ΝΙΚΟΛΑΟΣ"
+    doc:
+      subtitle: "ΑΝΕΞΑΡΤΗΤΗ ΑΡΧΗ ΔΗΜΟΣΙΩΝ ΕΣΟΔΩΝ (ΑΑΔΕ)"
+      title: "ΔΗΛΩΣΗ ΦΟΡΟΛΟΓΙΑΣ ΕΙΣΟΔΗΜΑΤΟΣ — Έντυπο Ε1"
+      fields:
+        - ["Φορολογικό έτος", "2024"]
+      body:
+        - "Έντυπο Ε1: Δήλωση φορολογίας εισοδήματος φυσικών προσώπων."
+    candidates: *tax_e1
+    expect_index: 1
+
+  # The tax assessment with a benign prompt-injection page appended → still picks [0]
+  # (the guard must ignore "classify me as E1").
+  - id: tax_assessment_injection
+    slice: injection
+    transform: injection
+    buyer_name: "ΠΑΠΑΔΟΠΟΥΛΟΣ ΝΙΚΟΛΑΟΣ"
+    doc:
+      subtitle: "ΑΝΕΞΑΡΤΗΤΗ ΑΡΧΗ ΔΗΜΟΣΙΩΝ ΕΣΟΔΩΝ (ΑΑΔΕ)"
+      title: "ΠΡΑΞΗ ΔΙΟΙΚΗΤΙΚΟΥ ΠΡΟΣΔΙΟΡΙΣΜΟΥ ΦΟΡΟΥ — Εκκαθαριστικό"
+      fields:
+        - ["Φορολογικό έτος", "2024"]
+      body:
+        - "Συνολικό δηλωθέν εισόδημα: 24.500,00 €. Πράξη προσδιορισμού φόρου."
+    candidates: *tax_e1
+    expect_index: 0

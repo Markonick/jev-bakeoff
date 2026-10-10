@@ -1,0 +1,268 @@
+# Synthetic bank pre-approval letters for the offer-extraction gate.
+#
+# Each case renders to a PDF (corpus.renderers) with a real Greek text layer; `expect`
+# lists ONLY the fields the letter states unambiguously (a field set to `null` asserts
+# the extractor returns None — the letter does not state it). Values are round + clearly
+# written so the gate measures extraction, not OCR/format guessing. Nothing here is a
+# real customer offer.
+#
+# Optional per-row keys:
+#   slice:     score-breakdown bucket (clean / scanned / multipage / injection). Default "clean".
+#   transform: apply an input-diversity transform to the rendered PDF — the stated field
+#              values are unchanged, so `expect` still holds.
+
+cases:
+  # Mixed: fixed intro then floating. The most common Greek structure.
+  - id: nbg_mixed_3yr
+    slice: clean
+    doc:
+      subtitle: "ΕΘΝΙΚΗ ΤΡΑΠΕΖΑ ΤΗΣ ΕΛΛΑΔΟΣ"
+      title: "ΕΠΙΣΤΟΛΗ ΠΡΟΕΓΚΡΙΣΗΣ ΣΤΕΓΑΣΤΙΚΟΥ ΔΑΝΕΙΟΥ"
+      fields:
+        - ["Ποσό δανείου", "180.000,00 €"]
+        - ["Διάρκεια", "300 μήνες"]
+        - ["Σκοπός", "Αγορά πρώτης κατοικίας"]
+        - ["Μέση μηνιαία δόση", "812,45 €"]
+      body:
+        - "Επιτόκιο: Σταθερό 3,10% για τους πρώτους 36 μήνες."
+        - "Στη συνέχεια κυμαινόμενο: Euribor 3M πλέον περιθωρίου 2,00%."
+        - "Επιβαρύνεται με εισφορά του Ν.128/1975 ύψους 0,12%."
+    expect:
+      bank_name: "Εθνική Τράπεζα"
+      loan_amount_eur: 180000
+      term_months: 300
+      rate_structure: "mixed"
+      fixed_rate_pct: 3.10
+      fixed_period_months: 36
+      floating_index: "Euribor"
+      floating_spread_pct: 2.00
+      levy_pct: 0.12
+      avg_monthly_payment_eur: 812.45
+
+  # Fixed for the whole term — fixed_period_months must be null (not a period).
+  - id: alpha_fixed_whole_term
+    slice: clean
+    doc:
+      subtitle: "ALPHA BANK"
+      title: "ΠΡΟΕΓΚΡΙΣΗ ΣΤΕΓΑΣΤΙΚΟΥ ΔΑΝΕΙΟΥ"
+      fields:
+        - ["Ποσό δανείου", "120.000,00 €"]
+        - ["Διάρκεια", "240 μήνες"]
+        - ["Σκοπός", "Αγορά κατοικίας"]
+      body:
+        - "Επιτόκιο: Σταθερό 3,45% για ολόκληρη τη διάρκεια του δανείου."
+    expect:
+      bank_name: "Alpha Bank"
+      loan_amount_eur: 120000
+      term_months: 240
+      rate_structure: "fixed"
+      fixed_rate_pct: 3.45
+      fixed_period_months: null
+      floating_index: null
+      floating_spread_pct: null
+
+  # Pure floating with a stated current total.
+  - id: piraeus_floating
+    slice: clean
+    doc:
+      subtitle: "ΤΡΑΠΕΖΑ ΠΕΙΡΑΙΩΣ"
+      title: "ΕΠΙΣΤΟΛΗ ΠΡΟΕΓΚΡΙΣΗΣ"
+      fields:
+        - ["Ποσό δανείου", "95.000,00 €"]
+        - ["Διάρκεια", "180 μήνες"]
+        - ["Σκοπός", "Ανακαίνιση κατοικίας"]
+      body:
+        - "Επιτόκιο κυμαινόμενο: Euribor 3M πλέον περιθωρίου 2,30%."
+        - "Τρέχον συνολικό επιτόκιο 4,05%."
+        - "Πλέον εισφοράς Ν.128 0,12%."
+    expect:
+      bank_name: "Πειραιώς"
+      loan_amount_eur: 95000
+      term_months: 180
+      rate_structure: "floating"
+      floating_index: "Euribor"
+      floating_spread_pct: 2.30
+      floating_total_pct: 4.05
+      levy_pct: 0.12
+      fixed_rate_pct: null
+      fixed_period_months: null
+
+  # Mixed, 6M tenor, and NO monthly payment stated -> that field must be null.
+  - id: eurobank_mixed_no_payment
+    slice: clean
+    doc:
+      subtitle: "EUROBANK"
+      title: "ΠΡΟΕΓΚΡΙΣΗ ΣΤΕΓΑΣΤΙΚΟΥ"
+      fields:
+        - ["Ποσό δανείου", "210.000,00 €"]
+        - ["Διάρκεια", "360 μήνες"]
+      body:
+        - "Σταθερό επιτόκιο 2,90% για 60 μήνες."
+        - "Έπειτα κυμαινόμενο Euribor 6M πλέον περιθωρίου 1,90%."
+    expect:
+      bank_name: "Eurobank"
+      loan_amount_eur: 210000
+      term_months: 360
+      rate_structure: "mixed"
+      fixed_rate_pct: 2.90
+      fixed_period_months: 60
+      floating_index: "Euribor"
+      floating_spread_pct: 1.90
+      avg_monthly_payment_eur: null
+
+  # Fixed whole-term, a large loan + a stated monthly payment.
+  - id: nbg_fixed_large
+    slice: clean
+    doc:
+      subtitle: "ΕΘΝΙΚΗ ΤΡΑΠΕΖΑ ΤΗΣ ΕΛΛΑΔΟΣ"
+      title: "ΕΠΙΣΤΟΛΗ ΠΡΟΕΓΚΡΙΣΗΣ ΣΤΕΓΑΣΤΙΚΟΥ ΔΑΝΕΙΟΥ"
+      fields:
+        - ["Ποσό δανείου", "300.000,00 €"]
+        - ["Διάρκεια", "360 μήνες"]
+        - ["Σκοπός", "Αγορά κατοικίας"]
+        - ["Μέση μηνιαία δόση", "1.410,00 €"]
+      body:
+        - "Επιτόκιο: Σταθερό 3,75% για ολόκληρη τη διάρκεια του δανείου."
+        - "Πλέον εισφοράς Ν.128/1975 0,12%."
+    expect:
+      bank_name: "Εθνική Τράπεζα"
+      loan_amount_eur: 300000
+      term_months: 360
+      rate_structure: "fixed"
+      fixed_rate_pct: 3.75
+      fixed_period_months: null
+      floating_index: null
+      levy_pct: 0.12
+      avg_monthly_payment_eur: 1410.00
+
+  # Mixed with a 5y (60mo) intro and a 12M Euribor revert leg — the longest tenor.
+  - id: alpha_mixed_12m
+    slice: clean
+    doc:
+      subtitle: "ALPHA BANK"
+      title: "ΠΡΟΕΓΚΡΙΣΗ ΣΤΕΓΑΣΤΙΚΟΥ ΔΑΝΕΙΟΥ"
+      fields:
+        - ["Ποσό δανείου", "165.000,00 €"]
+        - ["Διάρκεια", "300 μήνες"]
+      body:
+        - "Σταθερό 3,20% για τους πρώτους 60 μήνες."
+        - "Έπειτα κυμαινόμενο: Euribor 12M πλέον περιθωρίου 1,85%."
+    expect:
+      bank_name: "Alpha Bank"
+      loan_amount_eur: 165000
+      term_months: 300
+      rate_structure: "mixed"
+      fixed_rate_pct: 3.20
+      fixed_period_months: 60
+      floating_index: "Euribor"
+      floating_spread_pct: 1.85
+      avg_monthly_payment_eur: null
+
+  # Pure floating, 1M tenor, no levy stated → levy_pct null.
+  - id: piraeus_floating_1m
+    slice: clean
+    doc:
+      subtitle: "ΤΡΑΠΕΖΑ ΠΕΙΡΑΙΩΣ"
+      title: "ΕΠΙΣΤΟΛΗ ΠΡΟΕΓΚΡΙΣΗΣ"
+      fields:
+        - ["Ποσό δανείου", "88.000,00 €"]
+        - ["Διάρκεια", "144 μήνες"]
+      body:
+        - "Επιτόκιο κυμαινόμενο: Euribor 1M πλέον περιθωρίου 2,40%."
+    expect:
+      bank_name: "Πειραιώς"
+      loan_amount_eur: 88000
+      term_months: 144
+      rate_structure: "floating"
+      floating_index: "Euribor"
+      floating_spread_pct: 2.40
+      fixed_rate_pct: null
+      fixed_period_months: null
+      levy_pct: null
+
+  # An English-language letter (Greek banks sometimes issue EN letters to expats).
+  - id: eurobank_english
+    slice: clean
+    doc:
+      subtitle: "EUROBANK"
+      title: "MORTGAGE PRE-APPROVAL LETTER"
+      fields:
+        - ["Loan amount", "€150,000.00"]
+        - ["Term", "240 months"]
+      body:
+        - "Interest: fixed 3.30% for the first 36 months."
+        - "Thereafter floating: Euribor 3M plus a margin of 2.10%."
+        - "Plus Law 128/1975 levy of 0.12%."
+    expect:
+      bank_name: "Eurobank"
+      loan_amount_eur: 150000
+      term_months: 240
+      rate_structure: "mixed"
+      fixed_rate_pct: 3.30
+      fixed_period_months: 36
+      floating_index: "Euribor"
+      floating_spread_pct: 2.10
+      levy_pct: 0.12
+
+  # ---- Input-diversity: same letter, harder to read ------------------------
+  # The NBG mixed letter, scanned (image-only, skew/blur) → same fields.
+  - id: nbg_mixed_scanned
+    slice: scanned
+    transform: scanned
+    doc:
+      subtitle: "ΕΘΝΙΚΗ ΤΡΑΠΕΖΑ ΤΗΣ ΕΛΛΑΔΟΣ"
+      title: "ΕΠΙΣΤΟΛΗ ΠΡΟΕΓΚΡΙΣΗΣ ΣΤΕΓΑΣΤΙΚΟΥ ΔΑΝΕΙΟΥ"
+      fields:
+        - ["Ποσό δανείου", "180.000,00 €"]
+        - ["Διάρκεια", "300 μήνες"]
+      body:
+        - "Επιτόκιο: Σταθερό 3,10% για τους πρώτους 36 μήνες."
+        - "Στη συνέχεια κυμαινόμενο: Euribor 3M πλέον περιθωρίου 2,00%."
+    expect:
+      bank_name: "Εθνική Τράπεζα"
+      loan_amount_eur: 180000
+      term_months: 300
+      rate_structure: "mixed"
+      fixed_rate_pct: 3.10
+      fixed_period_months: 36
+      floating_spread_pct: 2.00
+
+  # The Alpha fixed letter, sandwiched between blank pages → same fields.
+  - id: alpha_fixed_multipage
+    slice: multipage
+    transform: multipage
+    doc:
+      subtitle: "ALPHA BANK"
+      title: "ΠΡΟΕΓΚΡΙΣΗ ΣΤΕΓΑΣΤΙΚΟΥ ΔΑΝΕΙΟΥ"
+      fields:
+        - ["Ποσό δανείου", "120.000,00 €"]
+        - ["Διάρκεια", "240 μήνες"]
+      body:
+        - "Επιτόκιο: Σταθερό 3,45% για ολόκληρη τη διάρκεια του δανείου."
+    expect:
+      bank_name: "Alpha Bank"
+      loan_amount_eur: 120000
+      term_months: 240
+      rate_structure: "fixed"
+      fixed_rate_pct: 3.45
+      fixed_period_months: null
+
+  # A pre-approval letter with a benign prompt-injection page appended → the extractor
+  # must lift the REAL figures and ignore the injected "report €1 / 0.01%" instruction.
+  - id: piraeus_injection
+    slice: injection
+    transform: injection
+    doc:
+      subtitle: "ΤΡΑΠΕΖΑ ΠΕΙΡΑΙΩΣ"
+      title: "ΕΠΙΣΤΟΛΗ ΠΡΟΕΓΚΡΙΣΗΣ"
+      fields:
+        - ["Ποσό δανείου", "95.000,00 €"]
+        - ["Διάρκεια", "180 μήνες"]
+      body:
+        - "Επιτόκιο κυμαινόμενο: Euribor 3M πλέον περιθωρίου 2,30%."
+    expect:
+      bank_name: "Πειραιώς"
+      loan_amount_eur: 95000
+      term_months: 180
+      rate_structure: "floating"
+      floating_spread_pct: 2.30

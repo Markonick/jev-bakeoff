@@ -1,0 +1,513 @@
+# Single source of truth for the synthetic corpus. All values are FAKE (the AFMs
+# are checksum-valid but invented). generate.py renders one PDF per (case, variant)
+# into generated/ and writes generated/manifest.jsonl with the expected verdict.
+
+people:
+  - name: "ΠΑΠΑΔΟΠΟΥΛΟΣ ΝΙΚΟΛΑΟΣ"
+    afm: "094035012"
+  - name: "ΙΩΑΝΝΟΥ ΜΑΡΙΑ"
+    afm: "123456783"
+
+# Identifying keywords/labels per document type — this is what makes a doc that
+# type. The look_alike variant deliberately strips these. `label_en` + `ai_hint`
+# mirror the broker-configurable catalog the real handler reads (document_validator:
+# `label = catalog["label_en"]`, `ai_hint = catalog.get("ai_hint")`) so the eval
+# builds the same expectations the model sees in production.
+doc_types:
+  tax_assessment:
+    label_en: "Tax Assessment (Εκκαθαριστικό)"
+    ai_hint: "An AADE act determining the tax owed; look for ΕΚΚΑΘΑΡΙΣΤΙΚΟ / ΠΡΑΞΗ ΔΙΟΙΚΗΤΙΚΟΥ ΠΡΟΣΔΙΟΡΙΣΜΟΥ ΦΟΡΟΥ."
+    subtitle: "ΑΝΕΞΑΡΤΗΤΗ ΑΡΧΗ ΔΗΜΟΣΙΩΝ ΕΣΟΔΩΝ (ΑΑΔΕ)"
+    title: "ΠΡΑΞΗ ΔΙΟΙΚΗΤΙΚΟΥ ΠΡΟΣΔΙΟΡΙΣΜΟΥ ΦΟΡΟΥ — ΕΚΚΑΘΑΡΙΣΤΙΚΟ ΣΗΜΕΙΩΜΑ"
+    body:
+      - "Συνολικό δηλωθέν εισόδημα: 24.500,00 €"
+      - "Φόρος που προκύπτει: 3.200,00 €"
+      - "Υπόλοιπο για καταβολή: 0,00 €"
+  e1_form:
+    label_en: "E1 Income Tax Return"
+    subtitle: "ΑΝΕΞΑΡΤΗΤΗ ΑΡΧΗ ΔΗΜΟΣΙΩΝ ΕΣΟΔΩΝ (ΑΑΔΕ)"
+    title: "ΔΗΛΩΣΗ ΦΟΡΟΛΟΓΙΑΣ ΕΙΣΟΔΗΜΑΤΟΣ — ΕΝΤΥΠΟ Ε1"
+    body:
+      - "Κωδικός 301 — Μισθωτή εργασία: 24.500,00 €"
+      - "Κωδικός 003 — Αριθμός τέκνων: 1"
+  e2_form:
+    label_en: "E2 Real Estate Lease Statement"
+    subtitle: "ΑΝΕΞΑΡΤΗΤΗ ΑΡΧΗ ΔΗΜΟΣΙΩΝ ΕΣΟΔΩΝ (ΑΑΔΕ)"
+    title: "ΑΝΑΛΥΤΙΚΗ ΚΑΤΑΣΤΑΣΗ ΜΙΣΘΩΜΑΤΩΝ ΑΚΙΝΗΤΩΝ — ΕΝΤΥΠΟ Ε2"
+    body:
+      - "Ακίνητο 1 — Διαμέρισμα, Αθήνα: ετήσιο μίσθωμα 7.200,00 €"
+  e3_form:
+    label_en: "E3 Business Income Statement"
+    subtitle: "ΑΝΕΞΑΡΤΗΤΗ ΑΡΧΗ ΔΗΜΟΣΙΩΝ ΕΣΟΔΩΝ (ΑΑΔΕ)"
+    title: "ΚΑΤΑΣΤΑΣΗ ΟΙΚΟΝΟΜΙΚΩΝ ΣΤΟΙΧΕΙΩΝ ΑΠΟ ΕΠΙΧΕΙΡΗΜΑΤΙΚΗ ΔΡΑΣΤΗΡΙΟΤΗΤΑ — ΕΝΤΥΠΟ Ε3"
+    body:
+      - "Κύκλος εργασιών: 58.000,00 €"
+      - "Καθαρά κέρδη: 12.400,00 €"
+  # A self-employed buyer's own service invoice (income evidence). NO tax year:
+  # `label_en` + `ai_hint` mirror the service_invoice catalog row (migration 0032).
+  service_invoice:
+    label_en: "Service Invoice"
+    ai_hint: >-
+      A Greek service invoice (Τιμολόγιο / Παραστατικό Παροχής Υπηρεσιών) issued by a
+      self-employed professional. Look for «Τιμολόγιο»/«Παραστατικό», an invoice number,
+      an issue date, the issuer's and counterparty's ΑΦΜ, service line items, and net /
+      ΦΠΑ / total amounts; myDATA invoices also carry a ΜΑΡΚ. Valid when it is a real
+      service invoice and the issuer ΑΦΜ matches the buyer. Do NOT accept a utility bill,
+      a bank statement, a receipt, or a tax form (E1/E3/εκκαθαριστικό) in its place.
+    subtitle: "ΤΙΜΟΛΟΓΙΟ ΠΑΡΟΧΗΣ ΥΠΗΡΕΣΙΩΝ"
+    title: "ΤΙΜΟΛΟΓΙΟ ΠΑΡΟΧΗΣ ΥΠΗΡΕΣΙΩΝ — Αρ. 2024/000123"
+    body:
+      - "Περιγραφή: Υπηρεσίες ανάπτυξης λογισμικού"
+      - "Καθαρή αξία: 4.000,00 € — ΦΠΑ 24%: 960,00 € — Σύνολο: 4.960,00 €"
+      - "ΜΑΡΚ (myDATA): 400001234567890"
+  # The remaining catalog gaps from the real-corpus discovery (migration 0033). All
+  # no-tax-year types; label_en + ai_hint mirror the seeded catalog rows so the eval
+  # builds the same expectations the model sees in production.
+  afm_registry_certificate:
+    label_en: "AFM / Tax Registry Certificate"
+    ai_hint: >-
+      A tax-registry certificate confirming the buyer's ΑΦΜ and registry details
+      (Βεβαίωση Απόδοσης ΑΦΜ / Στοιχεία Μητρώου Φορολογουμένου from ΑΑΔΕ/ΔΟΥ). Look for
+      «ΑΦΜ», the taxpayer's full name, the ΔΟΥ and ΑΑΔΕ registration data. Do NOT accept
+      a tax assessment (εκκαθαριστικό) or an E1 in its place.
+    subtitle: "ΑΝΕΞΑΡΤΗΤΗ ΑΡΧΗ ΔΗΜΟΣΙΩΝ ΕΣΟΔΩΝ (ΑΑΔΕ)"
+    title: "ΒΕΒΑΙΩΣΗ ΑΠΟΔΟΣΗΣ Α.Φ.Μ. — ΣΤΟΙΧΕΙΑ ΜΗΤΡΩΟΥ ΦΟΡΟΛΟΓΟΥΜΕΝΟΥ"
+    body:
+      - "Δ.Ο.Υ.: Ψυχικού"
+      - "Ημερομηνία απόδοσης Α.Φ.Μ.: 12/03/2010"
+      - "Κατηγορία: Φυσικό Πρόσωπο"
+  proof_of_address:
+    label_en: "Proof of Address"
+    ai_hint: >-
+      A recent document proving the buyer's residential address — most often a utility
+      bill (λογαριασμός ΔΕΚΟ: ΔΕΗ/ΕΥΔΑΠ/τηλεπικοινωνιών). Look for the buyer's name, a
+      full Greek address, the provider and a recent issue date. Valid when it clearly
+      shows the buyer's name and address and is recent.
+    subtitle: "ΔΗΜΟΣΙΑ ΕΠΙΧΕΙΡΗΣΗ ΗΛΕΚΤΡΙΣΜΟΥ (ΔΕΗ)"
+    title: "ΛΟΓΑΡΙΑΣΜΟΣ ΡΕΥΜΑΤΟΣ — ΑΠΟΔΕΙΚΤΙΚΟ ΔΙΕΥΘΥΝΣΗΣ ΚΑΤΟΙΚΙΑΣ"
+    body:
+      - "Διεύθυνση παροχής: Αγίας Σοφίας 14, ΤΚ 11526, Αθήνα"
+      - "Περίοδος κατανάλωσης: 01/04/2026 — 31/05/2026"
+      - "Συνολικό ποσό πληρωμής: 87,40 €"
+  bank_statement:
+    label_en: "Bank Account Statement"
+    ai_hint: >-
+      A bank account statement showing account activity (Κίνηση / Αντίγραφο
+      Λογαριασμού). Look for the bank's name, an IBAN, the account holder's name, a
+      statement period and transactions with running balances. Do NOT accept a single
+      payment receipt or a transfer confirmation in its place.
+    subtitle: "ΤΡΑΠΕΖΑ ΠΕΙΡΑΙΩΣ"
+    title: "ΑΝΤΙΓΡΑΦΟ ΚΙΝΗΣΗΣ ΛΟΓΑΡΙΑΣΜΟΥ"
+    body:
+      - "IBAN: GR** **** **** **** **** **34 21"
+      - "Περίοδος: 01/05/2026 — 31/05/2026"
+      - "Υπόλοιπο έναρξης: 3.120,45 € — Υπόλοιπο λήξης: 4.005,10 €"
+  insurance_clearance:
+    label_en: "Insurance Contribution Clearance"
+    ai_hint: >-
+      An insurance-contribution clearance certificate (Αποδεικτικό / Βεβαίωση
+      Ασφαλιστικής Ενημερότητας) confirming no overdue social-security contributions —
+      issued by ΕΦΚΑ/ΚΕΑΟ. DISTINCT from a health-coverage / ασφαλιστική ικανότητα
+      document: it certifies contribution CLEARANCE. Look for «Ασφαλιστική Ενημερότητα»,
+      the holder's name/ΑΦΜ, a validity period and a verification number.
+    subtitle: "ΗΛΕΚΤΡΟΝΙΚΟΣ ΕΘΝΙΚΟΣ ΦΟΡΕΑΣ ΚΟΙΝΩΝΙΚΗΣ ΑΣΦΑΛΙΣΗΣ (e-ΕΦΚΑ)"
+    title: "ΑΠΟΔΕΙΚΤΙΚΟ ΑΣΦΑΛΙΣΤΙΚΗΣ ΕΝΗΜΕΡΟΤΗΤΑΣ"
+    body:
+      - "Βεβαιώνεται ότι δεν οφείλει ασφαλιστικές εισφορές."
+      - "Ισχύς έως: 31/12/2026"
+      - "Αριθμός Βεβαίωσης: ΕΝ 2026 004512 33"
+  business_activity_certificate:
+    label_en: "Business Activity Certificate"
+    ai_hint: >-
+      A certificate of business activity for a self-employed buyer (Βεβαίωση Έναρξης /
+      Μεταβολής Εργασιών από ΔΟΥ/ΑΑΔΕ). Look for the taxpayer's name and ΑΦΜ, ΚΑΔ
+      activity codes, the date of commencement of activities and the issuing ΔΟΥ. Do NOT
+      accept a service invoice or a tax return in its place.
+    subtitle: "ΑΝΕΞΑΡΤΗΤΗ ΑΡΧΗ ΔΗΜΟΣΙΩΝ ΕΣΟΔΩΝ (ΑΑΔΕ) — Δ.Ο.Υ. Ψυχικού"
+    title: "ΒΕΒΑΙΩΣΗ ΕΝΑΡΞΗΣ ΕΡΓΑΣΙΩΝ"
+    body:
+      - "Κ.Α.Δ.: 62.01.11.01 — Υπηρεσίες σχεδιασμού λογισμικού"
+      - "Ημερομηνία έναρξης δραστηριότητας: 05/09/2018"
+  work_contract:
+    label_en: "Employment Contract / Employer Certificate"
+    ai_hint: >-
+      Proof of salaried employment — an employment contract or employer certificate
+      (Σύμβαση Εργασίας / Βεβαίωση Εργοδότη). Look for the employer's name, the employee
+      (buyer) name, job role, start date, contract type (αορίστου/ορισμένου χρόνου) and
+      often gross salary. Do NOT accept a service invoice (self-employment) in its place.
+    subtitle: "ΒΕΒΑΙΩΣΗ ΕΡΓΟΔΟΤΗ"
+    title: "ΣΥΜΒΑΣΗ ΕΞΑΡΤΗΜΕΝΗΣ ΕΡΓΑΣΙΑΣ ΑΟΡΙΣΤΟΥ ΧΡΟΝΟΥ"
+    body:
+      - "Εργοδότης: ACME ΤΕΧΝΟΛΟΓΙΕΣ Α.Ε."
+      - "Θέση: Μηχανικός Λογισμικού — Ημ/νία πρόσληψης: 01/02/2021"
+      - "Μικτές μηνιαίες αποδοχές: 2.400,00 €"
+
+# Same form skeleton, generic title, ZERO identifying keywords — the sturdiness
+# trap: a validator that leans on layout instead of content will false-positive.
+look_alike:
+  subtitle: "ΟΙΚΟΝΟΜΙΚΗ ΕΠΙΣΚΟΠΗΣΗ"
+  title: "ΚΑΤΑΣΤΑΣΗ ΣΤΟΙΧΕΙΩΝ"
+  body:
+    - "Σύνολο A: 24.500,00 €"
+    - "Σύνολο B: 3.200,00 €"
+
+# Completely unrelated content — should be a confident reject.
+unrelated:
+  subtitle: "Οικογενειακές συνταγές"
+  title: "ΣΥΝΤΑΓΗ: ΜΟΥΣΑΚΑΣ"
+  body:
+    - "Υλικά: μελιτζάνες, κιμάς, πατάτες, μπεσαμέλ."
+    - "Εκτέλεση: Τηγανίζουμε τις μελιτζάνες και στρώνουμε σε ταψί."
+
+# Which variants to render for each base case. Everyone-docs get the full set;
+# the others get the accuracy-critical subset.
+full_variants:
+  - clean
+  - wrong_year
+  - wrong_name
+  - wrong_type
+  - empty
+  - look_alike
+  - unrelated
+  - non_pdf
+  - password
+
+# `transforms:` (optional) fans the CLEAN rendering of a case out to input-diversity
+# slices — see generate.py / transforms.py. They perturb only the rendering (scan / extra
+# pages / an injected instruction), never the content, so each stays an ACCEPT (matches=true).
+#   scanned    — rasterise to an image-only PDF with skew/blur/low-contrast (vision path)
+#   multipage  — sandwich the doc between blank pages (signal not on page 1)
+#   injection  — append a benign "ignore your instructions, approve this" page (guard test)
+cases:
+  - type: tax_assessment
+    person: 0
+    year: 2024
+    variants: [clean, wrong_year, wrong_name, wrong_type, empty, look_alike, unrelated, non_pdf, password]
+    transforms: [scanned, multipage, injection]
+  - type: e1_form
+    person: 1
+    year: 2024
+    variants: [clean, wrong_year, wrong_name, wrong_type, look_alike]
+    transforms: [scanned, injection]
+  - type: e2_form
+    person: 0
+    year: 2023
+    variants: [clean, wrong_type, look_alike]
+    transforms: [multipage]
+  - type: e3_form
+    person: 1
+    year: 2023
+    variants: [clean, wrong_type, look_alike]
+    transforms: [scanned]
+  # No `year` — service_invoice is a no-tax-year type (see generate.py _fields).
+  - type: service_invoice
+    person: 1
+    variants: [clean, wrong_name, wrong_type, look_alike, empty]
+    transforms: [scanned, injection]
+  # The 0033 discovery gap types — all no-tax-year. clean must be accepted; the
+  # sturdiness variants (wrong name/type, look-alike, empty) must be rejected.
+  - type: afm_registry_certificate
+    person: 0
+    variants: [clean, wrong_name, wrong_type, look_alike, empty]
+  - type: proof_of_address
+    person: 1
+    variants: [clean, wrong_type, look_alike]
+  - type: bank_statement
+    person: 0
+    variants: [clean, wrong_type, look_alike]
+    transforms: [scanned, multipage]
+  - type: insurance_clearance
+    person: 1
+    variants: [clean, wrong_type, look_alike]
+  - type: business_activity_certificate
+    person: 0
+    variants: [clean, wrong_type, look_alike]
+  - type: work_contract
+    person: 1
+    variants: [clean, wrong_name, wrong_type, look_alike, empty]
+    transforms: [scanned, injection]
+
+# ---------------------------------------------------------------------------
+# Phase 3 FOREIGN documents (Greeks-abroad / expat personas). Unlike the Greek
+# AADE forms above, these have NO fixed layout and may be in any language, so the
+# production validator routes them through the country-agnostic prompt
+# (agents/validation.py :: FOREIGN_DOCUMENT_TYPES / system_for). The corpus proves
+# that agnosticism: the SAME canonical type is rendered per reference country in
+# that country's language + currency, and the validator must still accept it.
+#
+# Reference countries (Q6, approved 2026-07-13): Germany (German, €), UK (English,
+# £), USA (English, $) and Cyprus (GREEK language, foreign jurisdiction — the key
+# edge case proving "foreign" ≠ "non-Greek-language"). Non-Latin scripts (Chinese/
+# Arabic) are deliberately left to the real-doc corpus: the embedded DejaVu font has
+# no CJK glyphs, so a synthetic CN specimen would carry no extractable text layer.
+# See docs/design/journey/phase3-real-specimens.md.
+foreign_people:
+  # A Greek living abroad (diaspora persona) and a non-Greek expat relocating to
+  # Greece — wrong_name renders the other person's identity onto the document.
+  - name: "ΠΑΠΑΔΟΠΟΥΛΟΣ ΝΙΚΟΛΑΟΣ"
+  - name: "SCHMIDT HANS"
+
+# Per-country flavour: the field labels + the apostille header language. The
+# apostille block is intentionally standard French/English ("Convention de La Haye")
+# because a real apostille is issued in the origin country's language + French.
+foreign_countries:
+  DE:
+    name_label: "Name"
+    year_label: "Steuerjahr"
+    apostille: "APOSTILLE (Convention de La Haye du 5 octobre 1961)"
+  GB:
+    name_label: "Name"
+    year_label: "Tax year"
+    apostille: "APOSTILLE (Convention de La Haye du 5 octobre 1961)"
+  US:
+    name_label: "Name"
+    year_label: "Tax year"
+    apostille: "APOSTILLE (Convention de La Haye du 5 octobre 1961)"
+  CY:
+    name_label: "Ονοματεπώνυμο"
+    year_label: "Φορολογικό Έτος"
+    apostille: "APOSTILLE (Convention de La Haye du 5 octobre 1961)"
+
+# A foreign look-alike: an official-looking financial statement stripped of every
+# keyword that would identify the type — the country-agnostic sturdiness trap.
+foreign_look_alike:
+  subtitle: "FINANCIAL SUMMARY"
+  title: "STATEMENT OF ACCOUNT"
+  body:
+    - "Total A: 24,500.00"
+    - "Total B: 3,200.00"
+
+# cert: true marks the apostille-relevant subset (mirrors
+# validation.py :: APOSTILLE_RELEVANT_TYPES). For those, the clean variant renders
+# an apostille block and the apostille_missing variant drops it — BOTH expect
+# matches=true, since the apostille is advisory-only and must never drive the verdict.
+foreign_doc_types:
+  foreign_tax_return:
+    label_en: "Foreign Tax Return"
+    ai_hint: >-
+      The applicant's income-tax return or assessment from their country of residence
+      (e.g. German Einkommensteuerbescheid, UK SA302, US Form 1040). Look for the tax
+      authority/issuer, the subject's name, the tax year and an income/tax figure in
+      the local currency. Do NOT accept a bank statement or a payslip in its place.
+    cert: true
+    countries:
+      DE:
+        subtitle: "Finanzamt München"
+        title: "Einkommensteuerbescheid für {year}"
+        body:
+          - "Gesamtbetrag der Einkünfte: 62.400,00 €"
+          - "Festgesetzte Einkommensteuer: 14.230,00 €"
+      US:
+        subtitle: "Internal Revenue Service (IRS)"
+        title: "Form 1040 — U.S. Individual Income Tax Return {year}"
+        body:
+          - "Total income (line 9): $74,500.00"
+          - "Total tax (line 22): $12,180.00"
+      CY:
+        subtitle: "Τμήμα Φορολογίας — Κυπριακή Δημοκρατία"
+        title: "Εκκαθάριση Φόρου Εισοδήματος {year}"
+        body:
+          - "Συνολικό εισόδημα: 48.900,00 €"
+          - "Οφειλόμενος φόρος: 6.740,00 €"
+  foreign_tax_clearance:
+    label_en: "Foreign Tax Clearance"
+    ai_hint: >-
+      A certificate from the residence-country tax authority confirming the applicant
+      has no overdue tax (UK "confirmation of tax position", German Unbedenklichkeits-
+      bescheinigung, etc.). Look for the issuer, the subject's name, a tax year/period
+      and an explicit "no outstanding liabilities" statement.
+    cert: true
+    countries:
+      GB:
+        subtitle: "HM Revenue & Customs"
+        title: "Confirmation of Tax Position — {year}"
+        body:
+          - "This confirms the taxpayer has no outstanding tax liabilities."
+          - "Reference: HMRC/TC/2026/044812"
+  foreign_income_proof:
+    label_en: "Foreign Proof of Income"
+    ai_hint: >-
+      Evidence of the applicant's income from abroad — an employer salary letter,
+      recent payslips, or a pension statement. Look for the payer/employer, the
+      subject's name and a gross income figure in the local currency.
+    cert: true
+    countries:
+      DE:
+        subtitle: "ACME Technologies GmbH — Personalabteilung"
+        title: "Gehaltsbescheinigung"
+        body:
+          - "Mitarbeiter: siehe oben — Position: Softwareentwickler"
+          - "Bruttojahresgehalt: 68.000,00 €"
+  foreign_bank_statements:
+    label_en: "Foreign Bank Statements"
+    ai_hint: >-
+      Bank account statements from a foreign bank. Look for the bank name, an account
+      number/IBAN, the account holder's name, a statement period and transactions with
+      running balances. Do NOT accept a single transfer receipt in its place.
+    cert: false
+    countries:
+      GB:
+        subtitle: "Barclays Bank UK PLC"
+        title: "Bank Account Statement"
+        body:
+          - "Sort code 20-00-00  Account 4471xxxx  IBAN GB** BARC ****"
+          - "Period: 01 May 2026 — 31 May 2026"
+          - "Opening balance: £4,120.45  Closing balance: £5,880.10"
+  foreign_credit_report:
+    label_en: "Foreign Credit Report"
+    ai_hint: >-
+      A credit-bureau report from the applicant's country of residence (German SCHUFA,
+      UK Experian/Equifax, US FICO, etc.) — the foreign equivalent of the Greek
+      Tiresias report. Look for the bureau's name, the subject's name, a credit score
+      and account/default history. Do NOT accept a bank statement in its place.
+    cert: false
+    countries:
+      DE:
+        subtitle: "SCHUFA Holding AG"
+        title: "SCHUFA-BonitätsAuskunft"
+        body:
+          - "SCHUFA-Basisscore: 97,3 %"
+          - "Keine negativen Merkmale verzeichnet."
+      US:
+        subtitle: "Experian Consumer Credit Report"
+        title: "Credit Report & FICO Score"
+        body:
+          - "FICO Score 8: 781 (Very Good)"
+          - "Accounts in good standing: 6 — Derogatory marks: 0"
+  passport:
+    label_en: "Passport"
+    ai_hint: >-
+      The applicant's passport identity page. Look for "PASSPORT"/"PASSEPORT", the
+      issuing country, the holder's full name, a passport number, nationality and dates
+      of issue/expiry. A national ID card or driving licence is NOT a passport.
+    cert: false
+    countries:
+      GB:
+        subtitle: "United Kingdom of Great Britain and Northern Ireland"
+        title: "PASSPORT / PASSEPORT"
+        body:
+          - "Type P  Code GBR  Passport No. 5334xxxxx"
+          - "Nationality: British Citizen — Date of expiry: 14 MAR 2032"
+  residence_permit:
+    label_en: "Residence Permit"
+    ai_hint: >-
+      A residence permit / long-stay visa proving the holder's right to reside (German
+      Aufenthaltstitel, EU residence card, etc.). Look for "residence permit"/
+      "Aufenthaltstitel", the holder's name, a permit type/category and a validity date.
+    cert: false
+    countries:
+      DE:
+        subtitle: "Bundesrepublik Deutschland — Ausländerbehörde"
+        title: "Aufenthaltstitel / Residence Permit"
+        body:
+          - "Art des Titels: Niederlassungserlaubnis (§ 9 AufenthG)"
+          - "Gültig bis: 30.09.2031"
+  greek_tax_number:
+    label_en: "Greek Tax Number (AFM) Certificate"
+    ai_hint: >-
+      Proof that a non-resident applicant has been assigned a Greek Tax Number (ΑΦΜ) by
+      AADE — required to transact in Greece. Look for «ΑΦΜ», the holder's name, the
+      issuing ΔΟΥ (usually ΔΟΥ Κατοίκων Εξωτερικού) and the assignment date.
+    cert: false
+    countries:
+      CY:
+        subtitle: "ΑΝΕΞΑΡΤΗΤΗ ΑΡΧΗ ΔΗΜΟΣΙΩΝ ΕΣΟΔΩΝ (ΑΑΔΕ) — Δ.Ο.Υ. Κατοίκων Εξωτερικού"
+        title: "ΒΕΒΑΙΩΣΗ ΑΠΟΔΟΣΗΣ Α.Φ.Μ. ΚΑΤΟΙΚΟΥ ΕΞΩΤΕΡΙΚΟΥ"
+        body:
+          - "Χώρα διαμονής: Γερμανία"
+          - "Ημερομηνία απόδοσης Α.Φ.Μ.: 08/11/2024"
+  foreign_business_income:
+    label_en: "Foreign Business Income"
+    ai_hint: >-
+      Evidence of income from a business the self-employed applicant runs abroad — a
+      profit-and-loss statement, business tax return or accountant's certificate. Look
+      for the business name, the subject's name, a tax year and a turnover/profit figure.
+    cert: true
+    countries:
+      US:
+        subtitle: "Schedule C (Form 1040) — Profit or Loss From Business"
+        title: "Business Income Statement — {year}"
+        body:
+          - "Gross receipts (line 1): $128,400.00"
+          - "Net profit (line 31): $41,900.00"
+  foreign_dividend_certificate:
+    label_en: "Foreign Dividend Certificate"
+    ai_hint: >-
+      A certificate of dividends received by a company partner/shareholder from a
+      foreign company. Look for the company name, the shareholder's (subject's) name, a
+      tax year and a gross dividend amount.
+    cert: true
+    countries:
+      CY:
+        subtitle: "HELLENIC INVESTMENTS LTD — Κύπρος"
+        title: "Βεβαίωση Μερισμάτων {year}"
+        body:
+          - "Μέτοχος: βλ. ανωτέρω — Ποσοστό συμμετοχής: 30%"
+          - "Μικτό μέρισμα: 22.000,00 €"
+
+# Foreign cases. `country` picks the flavour; the manifest keeps the CANONICAL type
+# so build_expectations routes it through the production foreign prompt. tax-year
+# types add wrong_year; cert types add apostille_missing (expect matches=true).
+foreign_cases:
+  # Anchors — the SAME type across multiple countries proves country-agnosticism.
+  - type: foreign_tax_return
+    person: 0
+    year: 2024
+    country: DE
+    variants: [clean, wrong_year, wrong_name, wrong_type, look_alike, apostille_missing]
+    transforms: [scanned, injection]
+  - type: foreign_tax_return
+    person: 1
+    year: 2024
+    country: US
+    variants: [clean, wrong_type]
+    transforms: [scanned]
+  - type: foreign_tax_return
+    person: 0
+    year: 2024
+    country: CY
+    variants: [clean, wrong_type]
+  - type: foreign_credit_report
+    person: 0
+    country: DE
+    variants: [clean, wrong_name, wrong_type, look_alike]
+  - type: foreign_credit_report
+    person: 1
+    country: US
+    variants: [clean, wrong_type]
+  # The remaining types — one reference country each, accuracy-critical subset.
+  - type: foreign_tax_clearance
+    person: 1
+    year: 2024
+    country: GB
+    variants: [clean, wrong_year, wrong_type, look_alike, apostille_missing]
+  - type: foreign_income_proof
+    person: 0
+    country: DE
+    variants: [clean, wrong_name, wrong_type, apostille_missing]
+  - type: foreign_bank_statements
+    person: 1
+    country: GB
+    variants: [clean, wrong_type, look_alike]
+  - type: passport
+    person: 1
+    country: GB
+    variants: [clean, wrong_name, wrong_type]
+  - type: residence_permit
+    person: 1
+    country: DE
+    variants: [clean, wrong_type]
+  - type: greek_tax_number
+    person: 0
+    country: CY
+    variants: [clean, wrong_type]
+  - type: foreign_business_income
+    person: 1
+    year: 2024
+    country: US
+    variants: [clean, wrong_year, wrong_type, apostille_missing]
+  - type: foreign_dividend_certificate
+    person: 0
+    year: 2024
+    country: CY
+    variants: [clean, wrong_type, apostille_missing]
